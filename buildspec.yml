@@ -6,8 +6,6 @@ phases:
     runtime-versions:
       java: OpenJDK 17
 commands:
-      - apt-get update -y
-      - apt-get install -y maven
       - pip3 install --upgrade awscli
 pre_build:
     commands:
