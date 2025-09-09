@@ -1,30 +1,32 @@
 # Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
 version: 0.2
+
 phases:
   install:
     runtime-versions:
       java: corretto17
-commands:
+
+    commands:
       - pip3 install --upgrade awscli
-pre_build:
+
+  pre_build:
     commands:
       - sonar_host_url="http://51.20.95.70:9000/"
       - sonar_project_key="$REPOSITORY_NAME"
       - sonar_username=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.username')
       - sonar_password=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.password')
       - git checkout $SOURCE_COMMIT
-build:
+
+  build:
     commands:
-      - mvn clean install
+      - mvn install
       - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
-post_build:
+
+  post_build:
     commands:
-      - echo "Build completed on `date`"
-      - echo "Extracting SonarQube report URL..."
-      - echo "SonarQube Report: $sonar_link"
-      - sonar_link=$(cat target/sonar/report.txt | grep -oE "https?://[^ ,]+")
+      - sonar_link=$(echo $result | egrep -o "you can browse http://[^, ]+")
       - sonar_task_id=$(echo $result | egrep -o "task\?id=[^ ]+" | cut -d'=' -f2)
       - | # Allow time for SonarQube Background Task to complete
         stat="PENDING";
@@ -49,11 +51,6 @@ post_build:
           content="An unexpected error occurred while attempting to analyze with SonarQube.";
         fi
       - aws codecommit post-comment-for-pull-request --pull-request-id $PULL_REQUEST_ID --repository-name $REPOSITORY_NAME --before-commit-id $DESTINATION_COMMIT --after-commit-id $SOURCE_COMMIT --content "$content"
-artifacts:
-  files: 
-    - target/*.jar
-    - target/site/**/*
-    name: BuildArtif
-    discard-paths: no
 
-    
+artifacts:
+  files: '**/*'
