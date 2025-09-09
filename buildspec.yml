@@ -5,9 +5,11 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      java: corretto17
+      java: corretto 17
 
     commands:
+      - yum update -y
+      - yum install -y maven
       - pip3 install --upgrade awscli
 
   pre_build:
@@ -20,18 +22,13 @@ phases:
 
   build:
     commands:
-      - mvn clean install -e -X
+      - mvn install
       - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
 
   post_build:
     commands:
-      - sonar_link=$(echo "$result" | grep -oE "you can browse http://[^, ]+")
-        if [ -z "$sonar_link" ]; then
-          echo "SonarQube link not found in result output"
-        else
-          echo "SonarQube link: $sonar_link"
-        fi
+      - sonar_link=$(echo $result | egrep -o "you can browse http://[^, ]+")
       - sonar_task_id=$(echo $result | egrep -o "task\?id=[^ ]+" | cut -d'=' -f2)
       - | # Allow time for SonarQube Background Task to complete
         stat="PENDING";
