@@ -6,19 +6,16 @@ phases:
   install:
     runtime-versions:
       java: corretto17
-
     commands:
       - pip3 install --upgrade awscli
-
   pre_build:
     commands:
       - sonar_host_url="http://51.20.95.70:9000/"
       - sonar_project_key="$REPOSITORY_NAME"
       - sonar_username=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.username')
       - sonar_password=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.password')
-      - git clone https://git-codecommit.<region>.amazonaws.com/v1/repos/<your-repo> repo
+      - git clone https://github.com/devops-cg/aws-codecommit-pull-request-approver-demo-master.git repo
       - cd repo
-      - git checkout $CODEBUILD_RESOLVED_SOURCE_VERSION
       - git checkout $SOURCE_COMMIT
   build:
     commands:
