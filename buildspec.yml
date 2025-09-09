@@ -20,7 +20,7 @@ phases:
   build:
     commands:
       - mvn install
-      - mvn verify sonar:sonar -Dsonar.projectKey=sonar -Dsonar.organization=sonar-test -Dsonar.host.url=http://51.20.95.70:9000/ -Dsonar.login=squ_040414b1f8d4e92d9a29d94e44fc137d530b6544
+      - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
 
   post_build:
