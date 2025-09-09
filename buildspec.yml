@@ -1,47 +1,40 @@
-version: 0.1
+version: 0.2
+env:
+  secrets-manager:
+    SONAR_TOKEN: "squ_040414b1f8d4e92d9a29d94e44fc137d530b6544"
 phases:
   install:
-    runtime-versions:
-      java: corretto17
     commands:
-      - pip3 install --upgrade awscli
-  pre_build:
-    commands:
-      - git clone https://github.com/devops-cg/aws-codecommit-pull-request-approver-demo-master.git repo
-      - cd repo
-      - git checkout $SOURCE_COMMIT
+      # Install SonarScanner CLI
+      - wget -qO /tmp/sonar-scanner.zip "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip"
+      - unzip -q /tmp/sonar-scanner.zip -d /tmp
+   install:
+     runtime-versions:
+       java: corretto17
   build:
     commands:
-      - mvn clean install
-      - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
-      - echo $result
+      - mvn install
+      # Run SonarScanner analysis
+      - /tmp/sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner
+          -Dsonar.projectKey=App
+          -Dsonar.host.url=http://51.20.95.70:9000/
+          -Dsonar.login=$SONAR_TOKEN
+          -Dsonar.pullrequest.key=$CODEBUILD_SOURCE_VERSION
+          -Dsonar.pullrequest.branch=$CODEBUILD_WEBHOOK_HEAD_REF
+          -Dsonar.pullrequest.base=$CODEBUILD_WEBHOOK_BASE_REF
   post_build:
     commands:
-      - sonar_link=$(echo $result | egrep -o "you can browse http://[^, ]+")
-      - sonar_task_id=$(echo $result | egrep -o "task\?id=[^ ]+" | cut -d'=' -f2)
-      - | # Allow time for SonarQube Background Task to complete
-        stat="PENDING";
-        while [ "$stat" != "SUCCESS" ]; do
-          if [ $stat = "FAILED" ] || [ $stat = "CANCELLED" ]; then
-            echo "SonarQube task $sonar_task_id failed";
-            exit 1;
-          fi
-          stat=$(curl -u "$sonar_username:$sonar_password" $sonar_host_url/api/ce/task\?id=$sonar_task_id | jq -r '.task.status');
-          echo "SonarQube analysis status is $stat";
-          sleep 5;
-        done
-      - sonar_analysis_id=$(curl -u "$sonar_username:$sonar_password" $sonar_host_url/api/ce/task\?id=$sonar_task_id | jq -r '.task.analysisId')
-      - quality_status=$(curl -u "$sonar_username:$sonar_password" $sonar_host_url/api/qualitygates/project_status\?analysisId=$sonar_analysis_id 
+      # Fetch quality gate status
+      - sleep 10 # Wait for analysis to process
       - |
-        if [ $quality_status = "ERROR" ]; then
-          content=$(echo "SonarQube analysis complete. Quality Gate Failed.\n\nTo see why, $sonar_link");
-        elif [ $quality_status = "OK" ]; then
-          content=$(echo "SonarQube analysis complete. Quality Gate Passed.\n\nFor details, $sonar_link");
-          aws codecommit update-pull-request-approval-state --pull-request-id $PULL_REQUEST_ID --approval-state APPROVE --revision-id $REVISION_ID;
+        QUAL_GATE_STATUS=$(curl -s -u $SONAR_TOKEN: "$SONAR_QUBE_URL/api/qualitygates/project_status?projectKey=<YOUR_PROJECT_KEY>&pullRequest=$CODEBUILD_SOURCE_VERSION" | jq -r '.projectStatus.status')
+        echo "Quality Gate Status: $QUAL_GATE_STATUS"
+        if [ "$QUAL_GATE_STATUS" == "OK" ] ; then
+          # Call Lambda function to approve PR
+          aws lambda invoke --function-name <YOUR_LAMBDA_NAME> --invocation-type RequestResponse --payload '{"pr_id": "$CODEBUILD_SOURCE_VERSION", "repo_name": "$CODEBUILD_SOURCE_REPO_URL"}' output.json
         else
-          content="An unexpected error occurred while attempting to analyze with SonarQube.";
+          echo "SonarQube Quality Gate failed. PR will not be approved."
+          exit 1 # Fail the CodeBuild job
         fi
-      - aws codecommit post-comment-for-pull-request --pull-request-id $PULL_REQUEST_ID --repository-name $REPOSITORY_NAME --before-commit-id $DESTINATION_COMMIT --after-commit-id $SOURCE_COMMIT --content "$content"
-
 artifacts:
   files: '**/*'
