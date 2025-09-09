@@ -16,9 +16,10 @@ phases:
       - sonar_project_key="$REPOSITORY_NAME"
       - sonar_username=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.username')
       - sonar_password=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.password')
+      - git clone https://git-codecommit.<region>.amazonaws.com/v1/repos/<your-repo> repo
+      - cd repo
+      - git checkout $CODEBUILD_RESOLVED_SOURCE_VERSION
       - git checkout $SOURCE_COMMIT
-      - git fetch --depth=1
-
   build:
     commands:
       - mvn install
