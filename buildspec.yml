@@ -20,7 +20,7 @@ phases:
 
   build:
     commands:
-      - mvn install
+      - mvn clean install
       - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
 
