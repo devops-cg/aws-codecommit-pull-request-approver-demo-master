@@ -4,7 +4,7 @@ version: 0.2
 phases:
   install:
     runtime-versions:
-      java: openjdk11
+      java: OpenJDK 17
 commands:
       - apt-get update -y
       - apt-get install -y maven
