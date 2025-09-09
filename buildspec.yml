@@ -1,40 +1,12 @@
-version: 0.2
-env:
-  secrets-manager:
-    SONAR_TOKEN: "squ_040414b1f8d4e92d9a29d94e44fc137d530b6544"
+version: 0.1
 phases:
-  install:
-    commands:
-      # Install SonarScanner CLI
-      - wget -qO /tmp/sonar-scanner.zip "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip"
-      - unzip -q /tmp/sonar-scanner.zip -d /tmp
-   install:
-     runtime-versions:
-       java: corretto17
   build:
     commands:
-      - mvn install
-      # Run SonarScanner analysis
-      - /tmp/sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner
-          -Dsonar.projectKey=App
-          -Dsonar.host.url=http://51.20.95.70:9000/
-          -Dsonar.login=$SONAR_TOKEN
-          -Dsonar.pullrequest.key=$CODEBUILD_SOURCE_VERSION
-          -Dsonar.pullrequest.branch=$CODEBUILD_WEBHOOK_HEAD_REF
-          -Dsonar.pullrequest.base=$CODEBUILD_WEBHOOK_BASE_REF
+      - mvn verify sonar:sonar -Dsonar.projectKey=sonar -Dsonar.organization=sonar-test -Dsonar.host.url=http://51.20.95.70:9000/ -Dsonar.login=squ_040414b1f8d4e92d9a29d94e44fc137d530b6544
   post_build:
     commands:
       # Fetch quality gate status
       - sleep 10 # Wait for analysis to process
-      - |
-        QUAL_GATE_STATUS=$(curl -s -u $SONAR_TOKEN: "$SONAR_QUBE_URL/api/qualitygates/project_status?projectKey=<YOUR_PROJECT_KEY>&pullRequest=$CODEBUILD_SOURCE_VERSION" | jq -r '.projectStatus.status')
-        echo "Quality Gate Status: $QUAL_GATE_STATUS"
-        if [ "$QUAL_GATE_STATUS" == "OK" ] ; then
-          # Call Lambda function to approve PR
-          aws lambda invoke --function-name <YOUR_LAMBDA_NAME> --invocation-type RequestResponse --payload '{"pr_id": "$CODEBUILD_SOURCE_VERSION", "repo_name": "$CODEBUILD_SOURCE_REPO_URL"}' output.json
-        else
-          echo "SonarQube Quality Gate failed. PR will not be approved."
-          exit 1 # Fail the CodeBuild job
-        fi
+          
 artifacts:
   files: '**/*'
