@@ -4,11 +4,9 @@ version: 0.2
 
 phases:
   install:
-    - sudo apt-get update
-    - sudo apt-get install -y openjdk-17-jdk
-    - export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-    - export PATH=$JAVA_HOME/bin:$PATH
-    - java -version
+    install:
+    runtime-versions:
+      java: corretto17
 
     commands:
       - apt-get update -y
@@ -25,6 +23,9 @@ phases:
 
   build:
     commands:
+      - echo "Building with Java 17"
+      - java -version
+      - mvn package
       - mvn install
       - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
