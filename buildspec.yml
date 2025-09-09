@@ -16,12 +16,15 @@ pre_build:
       - git checkout $SOURCE_COMMIT
 build:
     commands:
-      - mvn install
+      - mvn clean install
       - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
 post_build:
     commands:
-      - sonar_link=$(echo $result | egrep -o "you can browse http://[^, ]+")
+      - echo "Build completed on `date`"
+      - echo "Extracting SonarQube report URL..."
+      - echo "SonarQube Report: $sonar_link"
+      - sonar_link=$(cat target/sonar/report.txt | grep -oE "https?://[^ ,]+")
       - sonar_task_id=$(echo $result | egrep -o "task\?id=[^ ]+" | cut -d'=' -f2)
       - | # Allow time for SonarQube Background Task to complete
         stat="PENDING";
@@ -47,4 +50,10 @@ post_build:
         fi
       - aws codecommit post-comment-for-pull-request --pull-request-id $PULL_REQUEST_ID --repository-name $REPOSITORY_NAME --before-commit-id $DESTINATION_COMMIT --after-commit-id $SOURCE_COMMIT --content "$content"
 artifacts:
-  files: '**/*'
+  files: 
+    - target/*.jar
+    - target/site/**/*
+    name: BuildArtif
+    discard-paths: no
+
+    
