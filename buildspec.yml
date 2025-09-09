@@ -11,7 +11,7 @@ phases:
   pre_build:
     commands:
       - sonar_host_url="http://51.20.95.70:9000/"
-      - sonar_project_key="$REPOSITORY_NAME"
+      - sonar_project_key="aws-codecommit-pull-request-approver-demo-master"
       - sonar_username=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.username')
       - sonar_password=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.password')
       - git clone https://github.com/devops-cg/aws-codecommit-pull-request-approver-demo-master.git repo
