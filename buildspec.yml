@@ -20,13 +20,18 @@ phases:
 
   build:
     commands:
-      - mvn clean install
+      - mvn clean install -e -X
       - result=$(mvn clean sonar:sonar -Dsonar.projectKey=$sonar_project_key -Dsonar.host.url=$sonar_host_url -Dsonar.login=$sonar_username -Dsonar.password=$sonar_password)
       - echo $result
 
   post_build:
     commands:
-      - sonar_link=$(echo $result | egrep -o "you can browse http://[^, ]+")
+      - sonar_link=$(echo "$result" | grep -oE "you can browse http://[^, ]+")
+        if [ -z "$sonar_link" ]; then
+          echo "SonarQube link not found in result output"
+        else
+          echo "SonarQube link: $sonar_link"
+        fi
       - sonar_task_id=$(echo $result | egrep -o "task\?id=[^ ]+" | cut -d'=' -f2)
       - | # Allow time for SonarQube Background Task to complete
         stat="PENDING";
