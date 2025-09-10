@@ -22,6 +22,7 @@ phases:
       - export PATH=$PATH:/sonar-scanner-4.6.2.2472-linux/bin
   build:
     commands:
+      - mvn install -DskipTests
       - mvn install     
       - mvn sonar:sonar -Dsonar.login=$LOGIN -Dsonar.host.url=$HOST -Dsonar.projectKey=$Project -Dsonar.organization=$Organization
       - sleep 5
