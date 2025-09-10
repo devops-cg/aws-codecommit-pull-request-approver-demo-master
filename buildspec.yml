@@ -1,6 +1,6 @@
 # Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: MIT-0
-version: 0.1
+version: 0.2
 env:
   secrets-manager:
     LOGIN: prod/sonar:sonartoken
