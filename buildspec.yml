@@ -3,11 +3,6 @@
 version: 0.2
 
 phases:
-  install:
-    runtime-versions:
-      java: corretto17
-    commands:
-      - pip3 install --upgrade awscli
   build:
     commands:
       - mvn verify sonar:sonar -Dsonar.projectKey=sonar -Dsonar.organization=sonar-test -Dsonar.host.url=http://51.20.95.70:9000/ -Dsonar.login=squ_040414b1f8d4e92d9a29d94e44fc137d530b6544
