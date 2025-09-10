@@ -3,7 +3,7 @@
 version: 0.2
 env:
   secrets-manager:
-    LOGIN: sonar-test-secretkeysonartoken
+    LOGIN: sonar-test-secretkey:sonartoken
     HOST: sonar-test-secretkey:HOST
     Organization: sonar-test-secretkey:Organization
     Project: sonar-test-secretkey:Project
