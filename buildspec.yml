@@ -4,6 +4,7 @@ version: 0.2
 env:
   secrets-manager:
     LOGIN: ad01e6d9ba051f6cb622611b537d86ed711db758
+  variables:
     HOST: https://sonarcloud.io/
     Organization: sonar-test
     Project: sonar-test-codepipeline_sonar-test
