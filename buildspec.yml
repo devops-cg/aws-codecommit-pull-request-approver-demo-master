@@ -1,11 +1,11 @@
 version: 0.2
-
 phases:
   install:
     runtime-versions:
       java: corretto17
     commands:
       - pip3 install --upgrade awscli
+      - aws --version
   pre_build:
     commands:
       - sonar_host_url="http://51.20.95.70:9000/"
