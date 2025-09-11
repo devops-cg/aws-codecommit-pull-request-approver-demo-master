@@ -24,9 +24,9 @@ phases:
       - sonar_project_key="aws-codecommit-pull-request-approver-demo-master"
       - sonar_username=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.username')
       - sonar_password=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.password')
-      - git https://github.com/devops-cg/aws-codecommit-pull-request-approver-demo-master.git repo
-      - cd repo
-      - git checkout $SOURCE_COMMIT
+   #   - git https://github.com/devops-cg/aws-codecommit-pull-request-approver-demo-master.git repo
+   #   - cd repo
+   #   - git checkout $SOURCE_COMMIT
   build:
     commands:
       - mvn install
