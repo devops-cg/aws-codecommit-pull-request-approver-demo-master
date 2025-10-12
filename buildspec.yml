@@ -22,6 +22,7 @@ phases:
       - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.3.0.5189-linux-x64.zip
       - unzip ./sonar-scanner-cli-7.3.0.5189-linux-x64.zip
       - export PATH=$PATH:/sonar-scanner-7.3.0.5189-linux/bin/
+      - export SONAR_HOST_URL
 
 
   pre_build:
