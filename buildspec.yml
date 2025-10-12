@@ -1,46 +1,46 @@
-# Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: MIT-0
 version: 0.2
+
 env:
   secrets-manager:
     SONAR_TOKEN: "SonarQubeUserSecret-Oa8WDsR0iMmt:SONAR_TOKEN"
     SONAR_HOST_URL: "SonarQubeUserSecret-Oa8WDsR0iMmt:SONAR_HOST_URL"
-    ORGANIZATION: "SonarQubeUserSecret-Oa8WDsR0iMmt:Organization"
     PROJECT: "SonarQubeUserSecret-Oa8WDsR0iMmt:Project"
-    SONARQUBE_USER_CREDENTIAL_SECRET: "SonarQubeUserSecret-Oa8WDsR0iMmt:UserCredentials"   # ADDED (must exist with username/password JSON)
+    ORGANIZATION: "SonarQubeUserSecret-Oa8WDsR0iMmt:Organization"   # optional (SonarCloud only)
 
 phases:
   install:
     runtime-versions:
       java: corretto17
     commands:
+      - echo "[INSTALL] Updating base packages"
       - apt-get update -y
-      - apt-get install -y maven jq   # ADDED jq
+      - apt-get install -y maven jq
       - pip3 install --upgrade awscli
-      - wget https://dlcdn.apache.org/maven/maven-3/3.8.9/binaries/apache-maven-3.8.9-bin.tar.gz
+      # (The next two downloads are optional; Maven plugin already runs Sonar)
+      - wget https://dlcdn.apache.org/maven/maven/3/3.8.9/binaries/apache-maven-3.8.9-bin.tar.gz
       - tar xzf apache-maven-3.8.9-bin.tar.gz
       - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.3.0.5189-linux-x64.zip
       - unzip ./sonar-scanner-cli-7.3.0.5189-linux-x64.zip
-      - export PATH=$PATH:$(pwd)/sonar-scanner-7.3.0.5189-linux-x64/bin   # FIXED path
+      - export PATH=$PATH:$(pwd)/sonar-scanner-7.3.0.5189-linux-x64/bin
 
   pre_build:
     commands:
-      - sonar_host_url="http://16.171.165.134:9000"
+      - sonar_host_url="$SONAR_HOST_URL"
       - sonar_project_key="$PROJECT"
-      - sonar_username=$(aws secretsmanager get-secret-value --secret-id "$SONARQUBE_USER_CREDENTIAL_SECRET" | jq -r '.SecretString' | jq -r '.username')
-      - sonar_password=$(aws secretsmanager get-secret-value --secret-id "$SONARQUBE_USER_CREDENTIAL_SECRET" | jq -r '.SecretString' | jq -r '.password')
-      - echo "Configuring Git for AWS CodeCommit..."
+      - echo "[PRE_BUILD] Sonar host: $sonar_host_url | Project: $sonar_project_key"
+      - echo "[PRE_BUILD] Configuring Git for CodeCommit"
       - git config --global credential.helper '!aws codecommit credential-helper $@'
       - git config --global credential.UseHttpPath true
-      - git checkout "$SOURCE_COMMIT" || echo "SOURCE_COMMIT not set or checkout failed (continuing)"
-      - echo "Sonar host: $sonar_host_url | Project: $sonar_project_key"
+      - git checkout "$SOURCE_COMMIT" 2>/dev/null || echo "[PRE_BUILD] SOURCE_COMMIT not set or checkout failed (continuing)"
 
   build:
     commands:
+      - echo "[BUILD] Formatting licenses"
       - mvn license:format
+      - echo "[BUILD] Primary build"
       - mvn clean install
+      - echo "[BUILD] Running tests + Sonar analysis"
       - |
-        # Capture sonar run output into result variable
         set -o pipefail
         result=$(mvn clean verify sonar:sonar \
           -Dsonar.projectKey="$PROJECT" \
@@ -49,59 +49,74 @@ phases:
           -Dsonar.token="$SONAR_TOKEN" \
           -Dsonar.verbose=true | tee /dev/stderr) || exit 1
         set +o pipefail
-      - echo "Attempting to parse sonar output for link & task id"
-      - echo "$result" | grep -i "ANALYSIS SUCCESSFUL" || echo "Did not see 'ANALYSIS SUCCESSFUL' line (may still succeed if CE processes later)"
+      - echo "[BUILD] Searching for report-task.txt"
+      - find . -path "*/sonar/report-task.txt" -maxdepth 6 -print || true
 
   post_build:
     commands:
-      - sonar_link=$(echo "$result" | egrep -o "you can browse http://[^, ]+" | head -n1 || true)
-      - sonar_task_id=$(echo "$result" | egrep -o "task\?id=[^ ]+" | cut -d'=' -f2 | head -n1 || true)
+      - REPORT_TASK=$(find . -path "*/sonar/report-task.txt" -maxdepth 6 | head -n1 || true)
       - |
-        if [ -z "$sonar_task_id" ]; then
-          echo "Could not extract sonar_task_id from output; attempting fallback via report-task.txt"
-          REPORT_TASK=$(find . -path "*/sonar/report-task.txt" -maxdepth 6 | head -n1 || true)
-          if [ -n "$REPORT_TASK" ]; then
-            sonar_task_id=$(grep '^ceTaskId=' "$REPORT_TASK" | cut -d'=' -f2-)
-            [ -z "$sonar_link" ] && sonar_link=$(grep '^dashboardUrl=' "$REPORT_TASK" | cut -d'=' -f2- | sed 's|^|you can browse |')
-          fi
-        fi
-      - |
-        if [ -z "$sonar_task_id" ]; then
-          echo "ERROR: No Sonar task id found."
-          exit 1
-        fi
-      - echo "Sonar task id: $sonar_task_id"
-      - |
-        # Allow time for SonarQube Background Task to complete
-        stat="PENDING"
-        while [ "$stat" != "SUCCESS" ]; do
-          if [ "$stat" = "FAILED" ] || [ "$stat" = "CANCELLED" ]; then
-            echo "SonarQube task $sonar_task_id failed"
+        if [ -z "$REPORT_TASK" ]; then
+          echo "[POST_BUILD] report-task.txt NOT found. Trying fallback parse..."
+          sonar_task_id=$(echo "$result" | egrep -o "task\?id=[^ ]+" | head -n1 | cut -d'=' -f2 || true)
+          if [ -z "$sonar_task_id" ]; then
+            echo "[POST_BUILD] No task id found in output. Failing."
             exit 1
           fi
-          stat=$(curl -s -u "$sonar_username:$sonar_password" "$sonar_host_url/api/ce/task?id=$sonar_task_id" | jq -r '.task.status')
-          echo "SonarQube analysis status is $stat"
+          ceTaskUrl="$SONAR_HOST_URL/api/ce/task?id=$sonar_task_id"
+          dashboardUrl=""
+        else
+          ceTaskUrl=$(grep '^ceTaskUrl=' "$REPORT_TASK" | cut -d'=' -f2-)
+          sonar_task_id=$(grep '^ceTaskId=' "$REPORT_TASK" | cut -d'=' -f2-)
+          dashboardUrl=$(grep '^dashboardUrl=' "$REPORT_TASK" | cut -d'=' -f2-)
+        fi
+      - echo "[POST_BUILD] ceTaskUrl=$ceTaskUrl"
+      - echo "[POST_BUILD] sonar_task_id=$sonar_task_id"
+      - echo "[POST_BUILD] dashboardUrl=$dashboardUrl"
+      - |
+        if [ -z "$ceTaskUrl" ] || [ -z "$sonar_task_id" ]; then
+          echo "[POST_BUILD] Missing ceTaskUrl or sonar_task_id"
+          exit 1
+        fi
+      - echo "[POST_BUILD] Polling Sonar Compute Engine task..."
+      - |
+        stat="PENDING"
+        for i in $(seq 1 30); do
+          TASK_JSON=$(curl -s -u "$SONAR_TOKEN:" "$ceTaskUrl")
+          stat=$(echo "$TASK_JSON" | jq -r '.task.status')
+          echo "Poll $i => $stat"
+          if [ "$stat" = "SUCCESS" ]; then
+            break
+          elif [ "$stat" = "FAILED" ] || [ "$stat" = "CANCELED" ]; then
+            echo "[POST_BUILD] Task failed"
+            echo "$TASK_JSON"
+            exit 1
+          fi
           sleep 5
         done
-      - sonar_analysis_id=$(curl -s -u "$sonar_username:$sonar_password" "$sonar_host_url/api/ce/task?id=$sonar_task_id" | jq -r '.task.analysisId')
-      - quality_status=$(curl -s -u "$sonar_username:$sonar_password" "$sonar_host_url/api/qualitygates/project_status?analysisId=$sonar_analysis_id" | jq -r '.projectStatus.status')
-      - echo "Quality Gate Status: $quality_status"
+      - sonar_analysis_id=$(curl -s -u "$SONAR_TOKEN:" "$ceTaskUrl" | jq -r '.task.analysisId')
+      - |
+        if [ -z "$sonar_analysis_id" ] || [ "$sonar_analysis_id" = "null" ]; then
+          echo "[POST_BUILD] Could not retrieve analysisId."
+          exit 1
+        fi
+      - QG_JSON=$(curl -s -u "$SONAR_TOKEN:" "$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$sonar_analysis_id")
+      - quality_status=$(echo "$QG_JSON" | jq -r '.projectStatus.status')
+      - echo "[POST_BUILD] Quality Gate Status: $quality_status"
       - |
         if [ "$quality_status" = "ERROR" ]; then
-          content=$(echo -e "SonarQube analysis complete. Quality Gate FAILED.\n\nTo see why, $sonar_link")
+          content="SonarQube Quality Gate FAILED. See ${dashboardUrl:-SonarQube}"
           exit_code=1
         elif [ "$quality_status" = "OK" ]; then
-          content=$(echo -e "SonarQube analysis complete. Quality Gate PASSED.\n\nFor details, $sonar_link")
-          exit_code=0
-          if [ -n "$PULL_REQUEST_ID" ] && [ -n "$REVISION_ID" ]; then
-            aws codecommit update-pull-request-approval-state --pull-request-id "$PULL_REQUEST_ID" --approval-state APPROVE --revision-id "$REVISION_ID" || echo "Auto-approval failed (non-fatal)"
-          fi
+            content="SonarQube Quality Gate PASSED. See ${dashboardUrl:-SonarQube}"
+            exit_code=0
         else
-          content="Unexpected SonarQube quality status: $quality_status"
+          content="Unexpected Quality Gate status: $quality_status"
           exit_code=1
         fi
       - |
         if [ -n "$PULL_REQUEST_ID" ] && [ -n "$REPOSITORY_NAME" ] && [ -n "$SOURCE_COMMIT" ] && [ -n "$DESTINATION_COMMIT" ]; then
+          echo "[POST_BUILD] Commenting on PR $PULL_REQUEST_ID"
           aws codecommit post-comment-for-pull-request \
             --pull-request-id "$PULL_REQUEST_ID" \
             --repository-name "$REPOSITORY_NAME" \
@@ -109,9 +124,21 @@ phases:
             --after-commit-id "$SOURCE_COMMIT" \
             --content "$content"
         else
-          echo "PR metadata missing; skipping comment"
+          echo "[POST_BUILD] PR metadata not present; skipping comment"
+        fi
+      - |
+        if [ "$exit_code" = "0" ] && [ -n "$PULL_REQUEST_ID" ] && [ -n "$REVISION_ID" ]; then
+          echo "[POST_BUILD] Auto-approving PR"
+          aws codecommit update-pull-request-approval-state \
+            --pull-request-id "$PULL_REQUEST_ID" \
+            --approval-state APPROVE \
+            --revision-id "$REVISION_ID" || echo "[POST_BUILD] Auto-approval failed (non-fatal)"
         fi
       - exit $exit_code
 
 artifacts:
   files: '**/*'
+
+cache:
+  paths:
+    - /root/.m2/repository/**/*
