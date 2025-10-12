@@ -17,9 +17,6 @@ phases:
       - apt-get update -y
       - apt-get install -y maven
       - pip3 install --upgrade awscli
-      - echo "Configuring Git for AWS CodeCommit..."
-      - git config --global credential.helper '!aws codecommit credential-helper $@'
-      - git config --global credential.UseHttpPath true
       - wget https://dlcdn.apache.org/maven/maven-3/3.8.9/binaries/apache-maven-3.8.9-bin.tar.gz
       - tar xzf apache-maven-3.8.9-bin.tar.gz
       - wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-7.3.0.5189-linux-x64.zip
@@ -33,6 +30,9 @@ phases:
       - sonar_project_key="$PROJECT"
       - sonar_username=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.username')
       - sonar_password=$(aws secretsmanager get-secret-value --secret-id $SONARQUBE_USER_CREDENTIAL_SECRET | jq -r '.SecretString' | jq -r '.password')
+      - echo "Configuring Git for AWS CodeCommit..."
+      - git config --global credential.helper '!aws codecommit credential-helper $@'
+      - git config --global credential.UseHttpPath true
       - git checkout $SOURCE_COMMIT
 
   build:
