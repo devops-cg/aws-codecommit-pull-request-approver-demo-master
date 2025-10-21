@@ -60,7 +60,7 @@ phases:
         else
           content="An unexpected error occurred while attempting to analyze with SonarQube.";
         fi
-      - aws codecommit post-comment-for-pull-request --pull-request-id $PULL_REQUEST_ID --repository-name $REPOSITORY_NAME --before-commit-id $DESTINATION_COMMIT --after-commit-id $SOURCE_COMMIT --content "$content"
+      - aws codecommit post-comment-for-pull-request --pull-request-id $PULL_REQUEST_ID --repository-name $REPOSITORY_NAME --before-commit-id $DESTINATION_COMMIT --after-commit-id $SOURCE_COMMIT --content "$content".
 
 artifacts:
   files: '**/*'
